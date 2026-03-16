@@ -1,0 +1,123 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin-bottom: 24px;
+  color: #f1f5f9;
+}
+
+.controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #1e293b;
+  border-radius: 8px;
+}
+
+.controls label {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.controls select,
+.controls input {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 0.9rem;
+}
+
+.controls button {
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: none;
+  background: #3b82f6;
+  color: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+  align-self: flex-end;
+}
+
+.controls button:hover {
+  background: #2563eb;
+}
+
+.controls button:disabled {
+  background: #475569;
+  cursor: not-allowed;
+}
+
+.chart-section {
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.chart-section h2 {
+  font-size: 1rem;
+  margin-bottom: 12px;
+  color: #94a3b8;
+}
+
+.status {
+  text-align: center;
+  padding: 40px;
+  color: #64748b;
+}
+
+.battery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.battery-card {
+  background: #0f172a;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.battery-card .pct {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.battery-card .time {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.react-datepicker-wrapper input {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 0.9rem;
+  width: 170px;
+}

@@ -1,0 +1,22 @@
+{
+  "name": "thingy-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "react-scripts start",
+    "build": "react-scripts build"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "plotly.js": "^2.27.0",
+    "react-plotly.js": "^2.6.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "react-datepicker": "^4.25.0"
+  },
+  "browserslist": {
+    "production": [">0.2%", "not dead", "not op_mini all"],
+    "development": ["last 1 chrome version", "last 1 firefox version"]
+  }
+}
