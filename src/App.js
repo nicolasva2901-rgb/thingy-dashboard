@@ -185,7 +185,7 @@ function App() {
               plot_bgcolor: "#0f172a",
               font: { color: "#94a3b8" },
               xaxis: { title: "Time", gridcolor: "#1e293b" },
-              yaxis: { title: "Acceleration (g)", gridcolor: "#1e293b" },
+              yaxis: { title: "Acceleration (m/s²)", gridcolor: "#1e293b" },
               margin: { t: 20, r: 20, b: 50, l: 60 },
               height: 300,
             }}
@@ -219,7 +219,7 @@ function App() {
               plot_bgcolor: "#0f172a",
               font: { color: "#94a3b8" },
               xaxis: { title: "Time", gridcolor: "#1e293b" },
-              yaxis: { title: "Acceleration (g)", gridcolor: "#1e293b" },
+              yaxis: { title: "Acceleration (m/s²)", gridcolor: "#1e293b" },
               margin: { t: 20, r: 20, b: 50, l: 60 },
               height: 300,
             }}
