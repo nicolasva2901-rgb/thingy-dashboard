@@ -1,8 +1,88 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Plot from "react-plotly.js";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { supabase } from "./supabaseClient";
+
+// Cap rendered points so long ranges (24h ≈ 850k+ samples) don't freeze the
+// browser. Short ranges stay below the cap and keep full resolution.
+const MAX_POINTS = 8000;
+
+// Bucket the series and keep, per bucket, the sample with the largest
+// |acceleration| so vibration peaks survive decimation. Null gap-markers are
+// passed through so Plotly still breaks the line across time gaps.
+function decimatePeak(times, values, maxPoints) {
+  const n = values.length;
+  if (n <= maxPoints) return { t: times, v: values };
+  const bucketSize = n / maxPoints;
+  const t = [];
+  const v = [];
+  for (let i = 0; i < maxPoints; i++) {
+    const start = Math.floor(i * bucketSize);
+    const end = Math.min(Math.floor((i + 1) * bucketSize), n);
+    let peakIdx = start;
+    let peakAbs = -Infinity;
+    for (let j = start; j < end; j++) {
+      const val = values[j];
+      if (val === null) {
+        peakIdx = j;
+        break;
+      }
+      const a = Math.abs(val);
+      if (a > peakAbs) {
+        peakAbs = a;
+        peakIdx = j;
+      }
+    }
+    t.push(times[peakIdx]);
+    v.push(values[peakIdx]);
+  }
+  return { t, v };
+}
+
+// Build Plotly traces for vibration data. Each row has 500 samples; insert null
+// gaps between batches so Plotly doesn't draw lines across time gaps.
+function buildVibrationTraces(rows) {
+  if (rows.length === 0) {
+    return { x: { t: [], v: [] }, z: { t: [], v: [] }, count: 0 };
+  }
+
+  const xAll = [];
+  const zAll = [];
+  const timeAll = [];
+
+  let prevBatchEnd = 0;
+
+  for (const row of rows) {
+    const batchTime = new Date(row.timestamp).getTime();
+    const sampleCount = row.x_values.length;
+
+    // If there's a gap > 5 seconds from the previous batch, insert a null
+    // to break the line
+    if (prevBatchEnd > 0 && batchTime - prevBatchEnd > 5000) {
+      timeAll.push(new Date(prevBatchEnd + 1));
+      xAll.push(null);
+      zAll.push(null);
+    }
+
+    // 10 Hz sampling = 100ms per sample, so 500 samples spans 50 seconds
+    const sampleIntervalMs = 100;
+    for (let i = 0; i < sampleCount; i++) {
+      const t = new Date(batchTime + i * sampleIntervalMs);
+      timeAll.push(t);
+      xAll.push(row.x_values[i]);
+      zAll.push(row.z_values[i]);
+    }
+
+    prevBatchEnd = batchTime + sampleCount * sampleIntervalMs;
+  }
+
+  return {
+    x: decimatePeak(timeAll, xAll, MAX_POINTS),
+    z: decimatePeak(timeAll, zAll, MAX_POINTS),
+    count: timeAll.length,
+  };
+}
 
 function App() {
   const [devices, setDevices] = useState([]);
@@ -78,46 +158,13 @@ function App() {
     setLoading(false);
   }, [selectedDevice, startDate, endDate]);
 
-  // Build Plotly traces for vibration data
-  // Each row has 500 samples; insert null gaps between batches so Plotly
-  // doesn't draw lines across time gaps
-  function buildVibrationTraces() {
-    if (vibrationData.length === 0) return { x: [], z: [], timestamps: [] };
-
-    const xAll = [];
-    const zAll = [];
-    const timeAll = [];
-
-    let prevBatchEnd = 0;
-
-    for (const row of vibrationData) {
-      const batchTime = new Date(row.timestamp).getTime();
-      const sampleCount = row.x_values.length;
-
-      // If there's a gap > 5 seconds from the previous batch, insert a null
-      // to break the line
-      if (prevBatchEnd > 0 && batchTime - prevBatchEnd > 5000) {
-        timeAll.push(new Date(prevBatchEnd + 1));
-        xAll.push(null);
-        zAll.push(null);
-      }
-
-      // 10 Hz sampling = 100ms per sample, so 500 samples spans 50 seconds
-      const sampleIntervalMs = 100;
-      for (let i = 0; i < sampleCount; i++) {
-        const t = new Date(batchTime + i * sampleIntervalMs);
-        timeAll.push(t);
-        xAll.push(row.x_values[i]);
-        zAll.push(row.z_values[i]);
-      }
-
-      prevBatchEnd = batchTime + sampleCount * sampleIntervalMs;
-    }
-
-    return { x: xAll, z: zAll, timestamps: timeAll };
-  }
-
-  const vibTraces = buildVibrationTraces();
+  // Memoized so traces are only rebuilt when the data changes, not on every
+  // render (the build + decimation is O(samples) and would otherwise re-run
+  // on every state update)
+  const vibTraces = useMemo(
+    () => buildVibrationTraces(vibrationData),
+    [vibrationData]
+  );
 
   return (
     <div className="app">
@@ -168,12 +215,12 @@ function App() {
       {/* X-axis vibration */}
       <div className="chart-section">
         <h2>X-Axis Vibration</h2>
-        {vibTraces.timestamps.length > 0 ? (
+        {vibTraces.count > 0 ? (
           <Plot
             data={[
               {
-                x: vibTraces.timestamps,
-                y: vibTraces.x,
+                x: vibTraces.x.t,
+                y: vibTraces.x.v,
                 type: "scattergl",
                 mode: "lines",
                 name: "X accel",
@@ -202,12 +249,12 @@ function App() {
       {/* Z-axis vibration */}
       <div className="chart-section">
         <h2>Z-Axis Vibration</h2>
-        {vibTraces.timestamps.length > 0 ? (
+        {vibTraces.count > 0 ? (
           <Plot
             data={[
               {
-                x: vibTraces.timestamps,
-                y: vibTraces.z,
+                x: vibTraces.z.t,
+                y: vibTraces.z.v,
                 type: "scattergl",
                 mode: "lines",
                 name: "Z accel",
