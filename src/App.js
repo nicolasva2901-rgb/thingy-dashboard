@@ -8,34 +8,54 @@ import { supabase } from "./supabaseClient";
 // browser. Short ranges stay below the cap and keep full resolution.
 const MAX_POINTS = 8000;
 
-// Bucket the series and keep, per bucket, the sample with the largest
-// |acceleration| so vibration peaks survive decimation. Null gap-markers are
-// passed through so Plotly still breaks the line across time gaps.
-function decimatePeak(times, values, maxPoints) {
+// Bucket the series and keep, per bucket, BOTH the lowest and highest sample
+// (emitted in time order). This preserves the true top-and-bottom envelope of
+// the signal, so an oscillating waveform looks the same zoomed out as it would
+// with every point plotted — no one-sided bias. Null gap-markers are passed
+// through so Plotly still breaks the line across time gaps.
+function decimateMinMax(times, values, maxPoints) {
   const n = values.length;
   if (n <= maxPoints) return { t: times, v: values };
-  const bucketSize = n / maxPoints;
   const t = [];
   const v = [];
-  for (let i = 0; i < maxPoints; i++) {
+  // Each bucket emits up to 2 points (min + max), so use half as many buckets
+  // to land near the maxPoints budget.
+  const buckets = Math.max(1, Math.floor(maxPoints / 2));
+  const bucketSize = n / buckets;
+  for (let i = 0; i < buckets; i++) {
     const start = Math.floor(i * bucketSize);
     const end = Math.min(Math.floor((i + 1) * bucketSize), n);
-    let peakIdx = start;
-    let peakAbs = -Infinity;
+    let minIdx = -1;
+    let maxIdx = -1;
+    let minVal = Infinity;
+    let maxVal = -Infinity;
+    let nullIdx = -1;
     for (let j = start; j < end; j++) {
       const val = values[j];
       if (val === null) {
-        peakIdx = j;
-        break;
+        nullIdx = j;
+        continue;
       }
-      const a = Math.abs(val);
-      if (a > peakAbs) {
-        peakAbs = a;
-        peakIdx = j;
+      if (val < minVal) {
+        minVal = val;
+        minIdx = j;
+      }
+      if (val > maxVal) {
+        maxVal = val;
+        maxIdx = j;
       }
     }
-    t.push(times[peakIdx]);
-    v.push(values[peakIdx]);
+    // Emit picks ordered by original index so time stays monotonic and any
+    // gap-break (null) lands in the right place.
+    const picks = [];
+    if (minIdx !== -1) picks.push(minIdx);
+    if (maxIdx !== -1 && maxIdx !== minIdx) picks.push(maxIdx);
+    if (nullIdx !== -1) picks.push(nullIdx);
+    picks.sort((a, b) => a - b);
+    for (const idx of picks) {
+      t.push(times[idx]);
+      v.push(values[idx]);
+    }
   }
   return { t, v };
 }
@@ -78,8 +98,8 @@ function buildVibrationTraces(rows) {
   }
 
   return {
-    x: decimatePeak(timeAll, xAll, MAX_POINTS),
-    z: decimatePeak(timeAll, zAll, MAX_POINTS),
+    x: decimateMinMax(timeAll, xAll, MAX_POINTS),
+    z: decimateMinMax(timeAll, zAll, MAX_POINTS),
     count: timeAll.length,
   };
 }
