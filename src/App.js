@@ -4,6 +4,16 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { supabase } from "./supabaseClient";
 
+// Website-only display label for a device: "Dormant-XX" where XX is the sensor
+// number pulled from the device id (e.g. thingy91_04 -> Dormant-04). Purely
+// cosmetic — does not touch AWS or the database. Falls back to the stored name
+// (or id) if the id has no trailing number.
+function deviceLabel(device) {
+  const match = String(device.id).match(/(\d+)\s*$/);
+  if (!match) return device.name || device.id;
+  return `Dormant-${match[1].padStart(2, "0")}`;
+}
+
 // Cap rendered points so long ranges (24h ≈ 850k+ samples) don't freeze the
 // browser. Short ranges stay below the cap and keep full resolution.
 const MAX_POINTS = 8000;
@@ -188,7 +198,7 @@ function App() {
 
   return (
     <div className="app">
-      <h1>Thingy:91 Sensor Dashboard</h1>
+      <h1>Inertia Monitoring Dashboard</h1>
 
       <div className="controls">
         <label>
@@ -199,7 +209,7 @@ function App() {
           >
             {devices.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.name}
+                {deviceLabel(d)}
               </option>
             ))}
           </select>
