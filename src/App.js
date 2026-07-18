@@ -65,8 +65,30 @@ function decimateMinMax(times, values, maxPoints) {
 
 // Build Plotly traces for vibration data. Each row has 500 samples; insert null
 // gaps between batches so Plotly doesn't draw lines across time gaps.
-function buildVibrationTraces(rows) {
+//
+// viewRange (optional [startMs, endMs]) limits the build to the currently
+// visible time window. When the user zooms in, only that window's raw samples
+// are built — so a small window falls under MAX_POINTS and renders at full
+// 10 Hz resolution even inside a huge (e.g. 24h) load. Passing null builds the
+// whole dataset (decimated to the envelope).
+function buildVibrationTraces(rows, viewRange) {
   if (rows.length === 0) {
+    return { x: { t: [], v: [] }, z: { t: [], v: [] }, count: 0 };
+  }
+
+  // Keep only rows whose 50s span overlaps the visible window (plus the whole
+  // boundary rows, so lines reach the chart edges).
+  let workingRows = rows;
+  if (viewRange) {
+    const [vs, ve] = viewRange;
+    workingRows = rows.filter((row) => {
+      const s = new Date(row.timestamp).getTime();
+      const e = s + row.x_values.length * 100;
+      return e >= vs && s <= ve;
+    });
+  }
+
+  if (workingRows.length === 0) {
     return { x: { t: [], v: [] }, z: { t: [], v: [] }, count: 0 };
   }
 
@@ -76,7 +98,7 @@ function buildVibrationTraces(rows) {
 
   let prevBatchEnd = 0;
 
-  for (const row of rows) {
+  for (const row of workingRows) {
     const batchTime = new Date(row.timestamp).getTime();
     const sampleCount = row.x_values.length;
 
@@ -119,6 +141,9 @@ function App() {
   const [vibrationData, setVibrationData] = useState([]);
   const [heartbeats, setHeartbeats] = useState([]);
   const [loading, setLoading] = useState(false);
+  // Currently visible time window [startMs, endMs], or null for the full range.
+  // Driven by chart zoom/pan so we can re-render the visible slice at full res.
+  const [viewRange, setViewRange] = useState(null);
 
   // Fetch device list on mount
   useEffect(() => {
@@ -176,18 +201,47 @@ function App() {
       fetchAll("heartbeats", "timestamp, battery_pct"),
     ]);
 
+    setViewRange(null); // reset zoom when a fresh range is loaded
     setVibrationData(vibData);
     setHeartbeats(hbData);
     setLoading(false);
   }, [selectedDevice, startDate, endDate]);
 
-  // Memoized so traces are only rebuilt when the data changes, not on every
-  // render (the build + decimation is O(samples) and would otherwise re-run
-  // on every state update)
+  // Memoized so traces are only rebuilt when the data or the visible window
+  // changes, not on every render. Zooming updates viewRange, which re-renders
+  // just the visible slice at full resolution.
   const vibTraces = useMemo(
-    () => buildVibrationTraces(vibrationData),
-    [vibrationData]
+    () => buildVibrationTraces(vibrationData, viewRange),
+    [vibrationData, viewRange]
   );
+
+  // Sync the visible window from chart zoom/pan. Both charts share one range so
+  // they stay aligned. Double-click (autorange) clears it back to the full view.
+  const handleRelayout = useCallback((e) => {
+    if (!e) return;
+    if (e["xaxis.autorange"]) {
+      setViewRange(null);
+      return;
+    }
+    const r0 = e["xaxis.range[0]"];
+    const r1 = e["xaxis.range[1]"];
+    if (r0 == null || r1 == null) return;
+    const s = new Date(r0).getTime();
+    const en = new Date(r1).getTime();
+    setViewRange((prev) => {
+      // Skip no-op updates (e.g. the programmatic relayout we trigger below)
+      // so we don't loop.
+      if (prev && Math.abs(prev[0] - s) < 1 && Math.abs(prev[1] - en) < 1) {
+        return prev;
+      }
+      return [s, en];
+    });
+  }, []);
+
+  // Applied to each chart's xaxis so both charts follow the shared zoom window.
+  const xAxisRange = viewRange
+    ? { range: [new Date(viewRange[0]), new Date(viewRange[1])], autorange: false }
+    : {};
 
   return (
     <div className="app">
@@ -254,11 +308,12 @@ function App() {
               paper_bgcolor: "transparent",
               plot_bgcolor: "#0f172a",
               font: { color: "#94a3b8" },
-              xaxis: { title: "Time", gridcolor: "#1e293b" },
+              xaxis: { title: "Time", gridcolor: "#1e293b", ...xAxisRange },
               yaxis: { title: "Acceleration (m/s²)", gridcolor: "#1e293b" },
               margin: { t: 20, r: 20, b: 50, l: 60 },
               height: 300,
             }}
+            onRelayout={handleRelayout}
             config={{ responsive: true, scrollZoom: true }}
             style={{ width: "100%" }}
           />
@@ -288,11 +343,12 @@ function App() {
               paper_bgcolor: "transparent",
               plot_bgcolor: "#0f172a",
               font: { color: "#94a3b8" },
-              xaxis: { title: "Time", gridcolor: "#1e293b" },
+              xaxis: { title: "Time", gridcolor: "#1e293b", ...xAxisRange },
               yaxis: { title: "Acceleration (m/s²)", gridcolor: "#1e293b" },
               margin: { t: 20, r: 20, b: 50, l: 60 },
               height: 300,
             }}
+            onRelayout={handleRelayout}
             config={{ responsive: true, scrollZoom: true }}
             style={{ width: "100%" }}
           />
