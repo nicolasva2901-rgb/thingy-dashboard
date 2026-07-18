@@ -4,9 +4,12 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { supabase } from "./supabaseClient";
 
-// Cap rendered points so long ranges (24h ≈ 850k+ samples) don't freeze the
-// browser. Short ranges stay below the cap and keep full resolution.
-const MAX_POINTS = 8000;
+// Cap rendered points so very long ranges (24h ≈ 850k+ samples) don't freeze
+// the browser. Set high enough that typical ranges render at full 10 Hz
+// resolution: ~50k points covers ~1.4 hours of continuous 10 Hz data before any
+// decimation kicks in. WebGL (scattergl) handles this comfortably; only
+// multi-hour / full-day ranges get thinned to the min/max envelope.
+const MAX_POINTS = 50000;
 
 // Bucket the series and keep, per bucket, BOTH the lowest and highest sample
 // (emitted in time order). This preserves the true top-and-bottom envelope of
